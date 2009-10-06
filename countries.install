@@ -1,0 +1,142 @@
+<?php
+// $Id$
+
+/**
+ * Implementation of hook_schema().
+ */
+function countries_schema() {
+  $schema['countries_country'] = array(
+    'description' => t('Maintains a country database.'),
+    'fields' => array(
+      'iso2' => array(
+        'description' => 'ISO2 country code.',
+        'type' => 'char',
+        'length' => 2,
+        'not null' => TRUE,
+      ),
+      'iso3' => array(
+        'description' => 'ISO3 country code.',
+        'type' => 'char',
+        'length' => 3,
+        'not null' => FALSE,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 80,
+        'not null' => TRUE,
+      ),
+      'printable_name' => array(
+        'type' => 'varchar',
+        'length' => 80,
+        'not null' => TRUE,
+      ),
+      'numcode' => array(
+        'type' => 'int',
+        'size' => 'small',
+        'not null' => FALSE,
+      ),
+      'continent' => array(
+        'description' => 'Continent code.',
+        'type'        => 'char',
+        'length'      => 2,
+        'not null'    => TRUE,
+      ),
+      'enabled' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 1,
+        'description' => t('Whether the country is enabled.'),
+      ),
+    ),
+    'primary key' => array('iso2'),
+  );
+
+  return $schema;
+}
+
+/**
+ * @file
+ * Install file for Countries API.
+ */
+
+/**
+ * Implement hook_install().
+ */
+function countries_install() {
+  // Create tables.
+  drupal_install_schema('countries');
+  countries_import_csv();
+}
+
+/**
+ * Implement hook_uninstall().
+ */
+function countries_uninstall() {
+  drupal_uninstall_schema('countries');
+  variable_del('countries_continents');
+}
+
+/**
+* Helper function to import countries.
+*
+* Defaults are loaded from CSV file, but only core
+* defined countries are enabled.
+**/
+function countries_import_csv() {
+  //Prepopulate countries table
+  $countries = array();
+  $handle = fopen(dirname(__FILE__) ."/countries.csv", "r");
+  $headers = fgetcsv($handle, 1024, ",");
+  while (($row = fgetcsv($handle, 1024, ",")) !== FALSE) {
+    $row[0] = trim($row[0]);
+    $row[3] = empty($row[3]) || $row[3] == 'NULL' ? '' : trim($row[3]);
+    $row[4] = empty($row[4]) || $row[4] == 'NULL' ? 0 : trim($row[4]);
+    $row[1] = empty($row[1]) || $row[1] == 'NULL' ? '' : trim($row[1]);
+    $row[2] = empty($row[2]) || $row[2] == 'NULL' ? '' : trim($row[2]);
+    if (!empty($row[0]) && $row[0] != 'NULL') {
+      $countries[$row[0]] = array(
+        'iso2' => $row[0],
+        'iso3' => $row[3],
+        'name' => $row[1],
+        'printable_name' => $row[2],
+        'continent' => 'UN',
+        'enabled' => 0,
+        'numcode' => $row[4],
+      );
+    }
+  }
+  fclose($handle);
+  $handle = fopen(dirname(__FILE__) ."/continents.csv", "r");
+  $headers = fgetcsv($handle, 1024, ",");
+  while (($row = fgetcsv($handle, 1024, ",")) !== FALSE) {
+    array_map('trim', $row);
+    if (isset($row[0]) && isset($row[1]) && array_key_exists($row[1], $countries) && $row[0] != 'NULL') {
+      $countries[$row[1]]['continent'] = $row[0];
+    }
+  }
+  fclose($handle);
+  include_once DRUPAL_ROOT . '/includes/iso.inc';
+  foreach(_country_get_predefined_list() as $code => $name) {
+    if (array_key_exists($code, $countries)) {
+      $countries[$code]['name'] = $name;
+      $countries[$code]['enabled'] = 1;
+    }
+    else {
+      $countries[$code] = array(
+        'iso2' => $code,
+        'iso3' => '',
+        'name' => $name,
+        'printable_name' => $name,
+        'continent' => 'UN',
+        'enabled' => 1,
+        'numcode' => 0,
+      );
+    }
+  }
+  $insert = db_insert('countries_country')->fields(array('iso2', 'iso3', 'name', 'printable_name', 'continent', 'enabled', 'numcode'));
+  foreach ($countries as $country) {
+    $insert->values($country);
+  }
+  $insert->execute();
+  watchdog('countries', "Pre-populated countries data.");
+}

@@ -1,0 +1,396 @@
+<?php
+//$Id$
+
+/**
+ * @file
+ */
+define ('COUNTRIES_ALL', 0);
+define ('COUNTRIES_ENABLED', 1);
+define ('COUNTRIES_DISABLED', 2);
+
+/**
+ * Implement hook_menu().
+ */
+function countries_menu() {
+  $items = array();
+  $items['admin/config/regional/countries'] = array(
+    'title' => 'Countries',
+    'description' => 'List, edit, or add countries.',
+    'page callback' => 'countries_admin_overview',
+    'access arguments' => array('administer site configuration'),
+    'file' => 'countries.admin.inc',
+  );
+  $items['admin/config/regional/countries/list'] = array(
+    'title' => 'List',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+  $items['admin/config/regional/countries/add'] = array(
+    'title' => 'Add country',
+    'page callback' => 'countries_admin_page',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_LOCAL_ACTION,
+    'weight' => 1,
+    'file' => 'countries.admin.inc',
+  );
+  $items['admin/config/regional/countries/%country'] = array(
+    'type' => MENU_CALLBACK,
+    'page callback' => 'countries_admin_page',
+    'page arguments' => array(4),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'countries.admin.inc',
+  );
+  $items['admin/config/regional/countries/%country/edit'] = array(
+    'title' => 'Edit',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => 0,
+  );
+  $items['admin/config/regional/countries/%country/delete'] = array(
+    'title' => 'Delete country',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('countries_admin_delete', 4),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+    'file' => 'countries.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Menu wildcard loader.
+ */
+function country_load($iso2) {
+  $countries = countries_get_countries();
+  return isset($countries[$iso2]) ? $countries[$iso2] : NULL;
+}
+
+/**
+ * Implement hook_element_info().
+ */
+function countries_element_info() {
+  $type['country'] = array(
+    '#input' => TRUE,
+    '#size' => 0,
+    '#multiple' => FALSE,
+    '#process' => array('countries_country_expand', 'ajax_process_form'),
+    '#theme' => 'select',
+    '#theme_wrappers' => array('form_element'),
+    // Filter based on enabled flag or continents to filter the options.
+    // 'enabled' => COUNTRIES_ENABLED || 'enabled' => COUNTRIES_DISABLED || 'enabled' => COUNTRIES_ALL
+    // 'continents' => array() === 'continents' => NULL || 'continents' => array('EU', 'AS')
+    // EG: '#filters' => array('COUNTRIES_ENABLED' => TRUE, 'continents' => array('EU'))
+    '#filters' => array(),
+    // If empty, the default list is the system country list, which is the
+    // list of all enabled countries, which runs through hook_countries_alter().
+    // Otherwise, the module runs it's own country list based on the filters.
+    '#options' => array(),
+  );
+  return $type;
+}
+
+function form_type_country_value($element, $input = FALSE) {
+  if ($input !== FALSE) {
+    if (isset($element['#multiple']) && $element['#multiple']) {
+      return (is_array($input)) ? array_values($input) : array();
+    }
+    else {
+      return $input;
+    }
+  }
+}
+
+/**
+ * Get all continents.
+ *
+ * @return
+ *   An array of (continent code, continent name) pairs.
+ */
+function countries_get_continents() {
+  return variable_get('countries_continents', countries_get_default_continents());
+}
+
+/**
+ * Get the default continents. For internal use only.
+ *
+ * @see countries_get_continents().
+ */
+function countries_get_default_continents() {
+  return array(
+    'AF' => t('Africa'),
+    'AS' => t('Asia'),
+    'EU' => t('Europe'),
+    'NA' => t('North America'),
+    'SA' => t('South America'),
+    'OC' => t('Oceania'),
+    'AN' => t('Antarctica'),
+    'UN' => t('Unknown'),
+  );
+}
+
+/**
+ * Our process callback to expand the control.
+ */
+function countries_country_expand($element) {
+  if (empty($element['#options'])) {
+    if (empty($element['#filters'])) {
+      include_once DRUPAL_ROOT . '/includes/locale.inc';
+      $element['#options'] = country_get_list();
+    }
+    else {
+      $element['#options'] = countries_get_countries('name');
+    }
+  }
+  $element['#options'] = countries_filter($element['#options'], $element['#filters']);
+  return $element;
+}
+
+function countries_filter($countries, $filters = array()) {
+  if (!empty($filters)) {
+    $target_countries = array();
+    foreach (countries_get_countries() as $country) {
+      $include = TRUE;
+      if (isset($filters['enabled'])) {
+        $include &= ($filters['enabled'] == COUNTRIES_ALL || ($filters['enabled'] == COUNTRIES_ENABLED && $country->enabled) || ($filters['enabled'] == COUNTRIES_DISABLED && !$country->enabled));
+      }
+      if (!empty($filters['continents'])) {
+        $include &= in_array($country->continent, $filters['continents']);
+      }
+      if ($include) {
+        $target_countries[$country->iso2] = TRUE;
+      }
+    }
+    $countries = array_intersect_key($countries, $target_countries);
+  }
+  return $countries;
+}
+
+/**
+ * Implement hook_countries_alter().
+ *
+ * Currently the only usage in core is in system module when
+ * setting the sites default country.
+ */
+function countries_countries_alter(&$countries) {
+  $enabled_countries = &drupal_static(__FUNCTION__, array());
+  if (empty($enabled_countries)) {
+    $countries = countries_get_countries();
+    foreach ($countries as $country) {
+      if ($country->enabled) {
+        $enabled_countries[$country->iso2] = $country->name;
+      }
+    }
+  }
+  $countries = array_intersect_key($enabled_countries, $countries);
+}
+
+/**
+ * Helper function to load all countries.
+ */
+function countries_get_country($iso2, $property = 'all') {
+  $countries = countries_get_countries($property);
+  return isset($countries[$iso2]) ? $countries[$iso2] : FALSE;
+}
+
+/**
+ * Helper function to load all countries.
+ */
+function countries_get_countries($property = 'all') {
+  $countries = &drupal_static(__FUNCTION__, array());
+  if (empty($countries)) {
+    $query = db_select('countries_country', 'c')
+      ->fields('c');
+    $result = $query->execute();
+    foreach ($result as $country) {
+      $countries[$country->iso2] = $country;
+    }
+  }
+  if ($property == 'all') {
+    return $countries;
+  }
+  $mapped_countries = array();
+  foreach ($countries as $country) {
+    $mapped_countries[$country->iso2] = $country->$property;
+  }
+  return $mapped_countries;
+}
+
+/**
+ * Implement hook_field_info().
+ */
+function countries_field_info() {
+  return array(
+    'country' => array(
+      'label' => t('Country'),
+      'description' => t('This field stores a country reference in the database.'),
+      'settings' => array(),
+      'default_widget' => 'country_select',
+      'default_formatter' => 'country_default',
+    ),
+  );
+}
+
+/**
+ * Implement hook_field_schema().
+ */
+function countries_field_schema($field) {
+  return array(
+    'columns' => array(
+      'iso2' => array(
+        'type' => 'char',
+        'length' => 3,
+        'not null' => FALSE,
+      ),
+    ),
+    'indexes' => array(
+      'iso2' => array('iso2'),
+    ),
+  );
+}
+
+/**
+ * Implement hook_field_load().
+ */
+function countries_field_load($obj_type, $objects, $field, $instances, $langcode, &$items) {
+  foreach ($objects as $id => $object) {
+    foreach ($items[$id] as $delta => $item) {
+      $items[$id][$delta]['safe'] = check_plain(countries_get_country($item['iso2'], 'name'));
+    }
+  }
+}
+
+/**
+ * Implement hook_field_sanitize().
+ */
+function countries_field_sanitize($obj_type, $object, $field, $instance, $langcode, &$items) {
+  foreach ($items as $delta => $item) {
+    if (!isset($items[$delta]['safe'])) {
+      $items[$delta]['safe'] = check_plain(countries_get_country($item['iso2'], 'name'));
+    }
+  }
+}
+
+/**
+ * Implement hook_field_is_empty().
+ */
+function countries_field_is_empty($item, $field) {
+  return empty($item['iso2']);
+}
+
+/**
+ * Implement hook_field_formatter_info().
+ */
+function countries_field_formatter_info() {
+  return array(
+    'country_default' => array(
+      'label' => t('Default'),
+      'field types' => array('country'),
+    ),
+  );
+}
+
+/**
+ * Theme function for 'default' country field formatter.
+ */
+function theme_field_formatter_country_default($element) {
+  return $element['#item']['safe'];
+}
+
+/**
+ * Implement hook_field_widget_info().
+ */
+function countries_field_widget_info() {
+  return array(
+    'country_select' => array(
+      'label' => t('Country select list'),
+      'field types' => array('country'),
+      'settings' => array('continents' => array(), 'enabled' => COUNTRIES_ENABLED, 'size' => 5),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_CUSTOM,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implement hook_field_widget_settings_form().
+ */
+function countries_field_widget_settings_form($field, $instance) {
+  $widget = $instance['widget'];
+  $settings = $widget['settings'];
+
+  $form['enabled'] = array(
+    '#type' => 'radios',
+    '#title' => t('Country status'),
+    '#default_value' => $settings['enabled'],
+    '#options' => array(
+      COUNTRIES_ALL => t('Both'),
+      COUNTRIES_ENABLED => t('Enabled countries only'),
+      COUNTRIES_DISABLED => t('Disabled countries only'),
+    ),
+  );
+
+  $form['continents'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Filter by continent'),
+    '#default_value' => $settings['continents'],
+    '#options' => countries_get_continents(),
+    '#description' => t('If no continents are selected, this filter will not be used.'),
+  );
+
+  $form['size'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Size'),
+    '#default_value' => $settings['size'],
+    '#element_validate' => array('_element_validate_integer_positive'),
+  );
+  return $form;
+}
+
+/**
+ * Implement hook_field_widget().
+ */
+function countries_field_widget(&$form, &$form_state, $field, $instance, $langcode, $items, $delta = 0) {
+  $default_value = array();
+  if (!is_array($items)) {
+    $items = array_filter(array($items));
+  }
+  foreach ($items as $item) {
+    $default_value []= $item['iso2'];
+  }
+  $settings = $instance['widget']['settings'];
+  $filters = array(
+    'continents' => array_filter($settings['continents']),
+    'enabled' => $settings['enabled'],
+  );
+  $element = array(
+    '#type' => 'country',
+    '#default_value' => $default_value,
+    '#multiple' => $field['cardinality'] != 1,
+    '#size' => $field['cardinality'] != 1 ? $settings['size'] : 1,
+    '#filters' => $filters,
+  );
+
+  // Set #element_validate in a way that it will not wipe out other
+  // validation functions already set by other modules.
+  if (empty($element['#element_validate'])) {
+    $element['#element_validate'] = array();
+  }
+  array_unshift($element['#element_validate'], 'countries_element_field_validate');
+
+  return $element;
+}
+
+/**
+ * We need to transform the field values here to complete the
+ * requirements for the field custom handling of multiple values.
+ */
+function countries_element_field_validate($element, &$form_state) {
+  $values = array();
+  if (!is_array($element['#value'])) {
+    $element['#value'] = array_filter(array($element['#value']));
+  }
+  foreach (array_values($element['#value']) as $value) {
+    $values[] = array('iso2' => $value);
+  }
+  form_set_value($element, $values, $form_state);
+}

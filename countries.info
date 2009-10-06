@@ -1,0 +1,8 @@
+; $Id$
+name = Countries
+description = Simple wrapper module to store / update country data.
+package = Other
+version = VERSION
+core = 7.x
+files[]=countries.module
+files[]=countries.admin.inc
