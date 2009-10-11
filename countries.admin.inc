@@ -10,13 +10,14 @@
  * Menu callback; Displays a list of all countries.
  */
 function countries_admin_overview() {
-  $output = '';
   $header = array();
   $header[] = array('data' => t('Name'), 'field' => 'c.name', 'sort' => 'asc');
   $header[] = array('data' => t('ISO2'), 'field' => 'c.iso2');
-  $header[] = array('data' => t('ISO3'), 'field' => 'c.iso3');
+  $columns = variable_get('countries_admin_overview_columns', array('iso3' => t('ISO3'), 'numcode' => t('Number code'), 'continent' => t('Continent'), 'official_name' => t('Official name')));
+  foreach ($columns as $key => $title) {
+    $header[] = array('data' => $title, 'field' => 'c.' . $key);
+  }
   $header[] = array('data' => t('Status'), 'field' => 'c.enabled');
-  $header[] = array('data' => t('Continent'), 'field' => 'c.continent');
   $header[] = array('data' => t('Operations'));
   $query = db_select('countries_country', 'c')->extend('PagerDefault')->extend('TableSort');
 
@@ -37,9 +38,21 @@ function countries_admin_overview() {
     $row = array();
     $row[] = l($country->name, 'admin/config/regional/countries/' . $country->iso2, array('query' => $destination));
     $row[] = $country->iso2;
-    $row[] = $country->iso3;
+    foreach ($columns as $key => $title) {
+      switch ($key) {
+        case 'continent':
+          $row[] = isset($continents[$country->continent]) ? $continents[$country->continent] : t('Unknown');
+          break;
+        case 'numcode':
+          $row[] = theme('countries_number', array('country' => $country));
+          break;
+        case 'iso3':
+        default:
+          $row[] = $country->$key;
+          break;
+      }
+    }
     $row[] = $country->enabled ? t('Enabled') : t('Disabled');
-    $row[] = isset($continents[$country->continent]) ? $continents[$country->continent] : t('Unknown');
     $operations = l(t('edit'), 'admin/config/regional/countries/' . $country->iso2 , array('query' => $destination));
     if (!array_key_exists($country->iso2, $core_countries)) {
       $operations .= '&nbsp;&nbsp;&nbsp;' . l(t('delete'), 'admin/config/regional/countries/' . $country->iso2 . '/delete', array('query' => $destination));
@@ -49,12 +62,18 @@ function countries_admin_overview() {
   }
   if (empty($rows)) {
     $rows[] = array(
-      array('data' => t('No countries available.'), 'colspan' => count($header)),
+      array('data' => t('No countries are available.'), 'colspan' => count($header)),
     );
   }
 
-  $output .= theme('table', $header, $rows) . theme('pager', NULL);
-  return $output;
+  $build['countries_table']  = array(
+    '#theme' => 'table',
+    '#header' => $header,
+    '#rows' => $rows,
+  );
+  $build['countries_pager'] = array('#theme' => 'pager');
+
+  return $build;
 }
 
 /**
@@ -66,7 +85,7 @@ function countries_admin_page($country = NULL) {
     $country = (object)array('iso2' => '',
         'iso3' => '',
         'name' => '',
-        'printable_name' => '',
+        'official_name' => '',
         'continent' => 'UN',
         'enabled' => 1,
         'numcode' => 0);
@@ -91,7 +110,7 @@ function countries_admin_form($form, &$form_state, $country) {
     '#default_value' => $country->name,
     '#description' => t('Specify a unique name for this country.'),
     '#required' => TRUE,
-    '#maxlength' => 80,
+    '#maxlength' => 95,
   );
   $iso2_editable = TRUE;
   if (!empty($country->iso2)) {
@@ -130,20 +149,21 @@ function countries_admin_form($form, &$form_state, $country) {
     '#required' => FALSE,
     '#maxlength' => 3,
   );
-  $form['printable_name'] = array(
+  $form['official_name'] = array(
     '#type' => 'textfield',
-    '#title' => t('Printable name'),
-    '#default_value' => $country->printable_name,
-    '#description' => t('Specify a unique printable name for this country.'),
+    '#title' => t('Official name'),
+    '#default_value' => $country->official_name,
+    '#description' => t('Specify the unique official name for this country.'),
     '#required' => FALSE,
-    '#maxlength' => 80,
+    '#maxlength' => 127,
   );
   $form['numcode'] = array(
     '#type' => 'textfield',
     '#title' => t('Number code'),
-    '#default_value' => $country->numcode,
+    '#default_value' => empty($country->numcode) ? '' : $country->numcode,
     '#description' => t('Specify a unique number code for this country.'),
     '#required' => FALSE,
+    '#maxlength' => 5,
   );
 
   $form['continent'] = array('#type' => 'select',
@@ -170,7 +190,7 @@ function countries_admin_form($form, &$form_state, $country) {
  */
 function countries_admin_form_validate($form, &$form_state) {
   // Edits
-  $unique_keys = array('name', 'iso2', 'iso3', 'printable_name', 'numcode');
+  $unique_keys = array('name', 'iso2', 'iso3', 'official_name', 'numcode');
 
   foreach ($unique_keys as $key) {
     if (drupal_strlen($form_state['values'][$key])) {
@@ -198,7 +218,7 @@ function countries_admin_form_validate($form, &$form_state) {
             }
           }
           break;
-        case 'printable_name':
+        case 'official_name':
           break;
         case 'numcode':
           if (preg_match('/[^0-9]/', $form_state['values'][$key])) {
@@ -233,13 +253,17 @@ function countries_admin_form_submit($form, &$form_state) {
     }
     drupal_write_record('countries_country', $country, array('iso2'));
     $message = t('The country %country has been updated.', array('%country' => $country->name));
+    field_cache_clear();
   }
   else {
     drupal_write_record('countries_country', $country);
     $message = t('Added country %country.', array('%country' => $country->name));
   }
+  // TODO: I18n
+  // countries_locale_process($country);
   drupal_set_message($message);
   $form_state['redirect'] = 'admin/config/regional/countries';
+
 }
 
 /**

@@ -1,6 +1,6 @@
 ; $Id$
 name = Countries
-description = Simple wrapper module to store / update country data.
+description = A module that provides a FAPI / Field country element and a simple wrapper module to store / update country data.
 package = Other
 version = VERSION
 core = 7.x

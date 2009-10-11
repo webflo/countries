@@ -9,6 +9,15 @@ define ('COUNTRIES_ENABLED', 1);
 define ('COUNTRIES_DISABLED', 2);
 
 /**
+ * Implement hook_theme().
+ */
+function countries_theme() {
+  return array(
+    'countries_number' => array(),
+  );
+}
+
+/**
  * Implement hook_menu().
  */
 function countries_menu() {
@@ -73,12 +82,13 @@ function countries_element_info() {
     '#size' => 0,
     '#multiple' => FALSE,
     '#process' => array('countries_country_expand', 'ajax_process_form'),
+    '#element_validate' => array('countries_country_element_validate'),
     '#theme' => 'select',
     '#theme_wrappers' => array('form_element'),
     // Filter based on enabled flag or continents to filter the options.
     // 'enabled' => COUNTRIES_ENABLED || 'enabled' => COUNTRIES_DISABLED || 'enabled' => COUNTRIES_ALL
     // 'continents' => array() === 'continents' => NULL || 'continents' => array('EU', 'AS')
-    // EG: '#filters' => array('COUNTRIES_ENABLED' => TRUE, 'continents' => array('EU'))
+    // EG: '#filters' => array('enabled' => COUNTRIES_ENABLED, 'continents' => array('EU'))
     '#filters' => array(),
     // If empty, the default list is the system country list, which is the
     // list of all enabled countries, which runs through hook_countries_alter().
@@ -99,6 +109,23 @@ function form_type_country_value($element, $input = FALSE) {
   }
 }
 
+function countries_country_element_validate($element, &$form_state) {
+  if (!isset($element['#cardinality'])) {
+    return;
+  }
+  $values = array();
+  if (!is_array($element['#value'])) {
+    $element['#value'] = array_filter(array($element['#value']));
+  }
+  foreach (array_values($element['#value']) as $value) {
+    $values[] = array('iso2' => $value);
+  }
+  if ($element['#cardinality'] >= 0 && count($values) > $element['#cardinality']) {
+    form_error($element, t('%name field is restricted to %max countries.', array('%name' => $element['#title'], '%max' => $element['#cardinality'])));
+  }
+
+}
+
 /**
  * Get all continents.
  *
@@ -106,7 +133,17 @@ function form_type_country_value($element, $input = FALSE) {
  *   An array of (continent code, continent name) pairs.
  */
 function countries_get_continents() {
-  return variable_get('countries_continents', countries_get_default_continents());
+  $continents = &drupal_static(__FUNCTION__, array());
+  if (empty($continents)) {
+    $continents = variable_get('countries_continents', countries_get_default_continents());
+    // TODO: I18n
+//    if (module_exists('i18nstrings')) {
+//      foreach ($continents as $code => $continent) {
+//        $continents[$code] = countries_localize("countries:continent-{$code}:name", $continent);
+//      }
+//    }
+  }
+  return $continents;
 }
 
 /**
@@ -141,6 +178,7 @@ function countries_country_expand($element) {
     }
   }
   $element['#options'] = countries_filter($element['#options'], $element['#filters']);
+
   return $element;
 }
 
@@ -201,6 +239,8 @@ function countries_get_countries($property = 'all') {
       ->fields('c');
     $result = $query->execute();
     foreach ($result as $country) {
+      // TODO: I18n
+      // countries_localize_country($country);
       $countries[$country->iso2] = $country;
     }
   }
@@ -253,7 +293,8 @@ function countries_field_schema($field) {
 function countries_field_load($obj_type, $objects, $field, $instances, $langcode, &$items) {
   foreach ($objects as $id => $object) {
     foreach ($items[$id] as $delta => $item) {
-      $items[$id][$delta]['safe'] = check_plain(countries_get_country($item['iso2'], 'name'));
+      $items[$id][$delta]['country'] = countries_get_country($item['iso2']);
+      $items[$id][$delta]['safe'] = check_plain($items[$id][$delta]['country']->name);
     }
   }
 }
@@ -264,7 +305,8 @@ function countries_field_load($obj_type, $objects, $field, $instances, $langcode
 function countries_field_sanitize($obj_type, $object, $field, $instance, $langcode, &$items) {
   foreach ($items as $delta => $item) {
     if (!isset($items[$delta]['safe'])) {
-      $items[$delta]['safe'] = check_plain(countries_get_country($item['iso2'], 'name'));
+      $items[$delta]['country'] = countries_get_country($item['iso2']);
+      $items[$delta]['safe'] = check_plain($items[$id][$delta]['country']->name);
     }
   }
 }
@@ -285,14 +327,66 @@ function countries_field_formatter_info() {
       'label' => t('Default'),
       'field types' => array('country'),
     ),
+    'country_official' => array(
+      'label' => t('Official name'),
+      'field types' => array('country'),
+    ),
+    'country_alpha_2' => array(
+      'label' => t('ISO alpha-2 code'),
+      'field types' => array('country'),
+    ),
+    'country_alpha_3' => array(
+      'label' => t('ISO alpha-3 code'),
+      'field types' => array('country'),
+    ),
+    'country_number' => array(
+      'label' => t('ISO numeric-3 code'),
+      'field types' => array('country'),
+    ),
   );
 }
 
 /**
  * Theme function for 'default' country field formatter.
  */
-function theme_field_formatter_country_default($element) {
+function theme_field_formatter_country_default($variables) {
+  $element = $variables['element'];
   return $element['#item']['safe'];
+}
+
+/**
+ * Theme function for showing the countries official name.
+ */
+function theme_field_formatter_country_official($variables) {
+  $element = $variables['element'];
+  if (!empty($element['#item']['country']->official_name)) {
+    return check_plain($element['#item']['country']->official_name);
+  }
+  return $element['#item']['safe'];
+}
+
+/**
+ * Theme function for showing the country ISO 3166-1 alpha-2 code.
+ */
+function theme_field_formatter_country_alpha_2($variables) {
+  $country = $variables['element']['#item']['country'];
+  return check_plain($country->iso2);
+}
+
+/**
+ * Theme function for showing the country ISO 3166-1 alpha-3 code.
+ */
+function theme_field_formatter_country_alpha_3($variables) {
+  $country = $variables['element']['#item']['country'];
+  return empty($country->iso3) ? '---' : check_plain($country->iso3);
+}
+
+/**
+ * Theme function for showing the country number.
+ */
+function theme_field_formatter_country_number($variables) {
+  $element = $variables['element'];
+  return theme('countries_number', array('country' => $element['#item']['country']));
 }
 
 /**
@@ -366,16 +460,11 @@ function countries_field_widget(&$form, &$form_state, $field, $instance, $langco
     '#type' => 'country',
     '#default_value' => $default_value,
     '#multiple' => $field['cardinality'] != 1,
+    '#cardinality' => $field['cardinality'],
     '#size' => $field['cardinality'] != 1 ? $settings['size'] : 1,
     '#filters' => $filters,
+    '#element_validate' => array('countries_country_field_validate', 'countries_country_element_validate')
   );
-
-  // Set #element_validate in a way that it will not wipe out other
-  // validation functions already set by other modules.
-  if (empty($element['#element_validate'])) {
-    $element['#element_validate'] = array();
-  }
-  array_unshift($element['#element_validate'], 'countries_element_field_validate');
 
   return $element;
 }
@@ -383,8 +472,13 @@ function countries_field_widget(&$form, &$form_state, $field, $instance, $langco
 /**
  * We need to transform the field values here to complete the
  * requirements for the field custom handling of multiple values.
+ *
+ * This converts the array('AU' => 'AU', 'US' => 'US') to
+ * array(0 => array('iso2' => 'AU'), 1 => array('iso2' => 'US')).
+ *
+ * @see countries_country_element_validate() for validation.
  */
-function countries_element_field_validate($element, &$form_state) {
+function countries_country_field_validate($element, &$form_state) {
   $values = array();
   if (!is_array($element['#value'])) {
     $element['#value'] = array_filter(array($element['#value']));
@@ -393,4 +487,11 @@ function countries_element_field_validate($element, &$form_state) {
     $values[] = array('iso2' => $value);
   }
   form_set_value($element, $values, $form_state);
+}
+
+function theme_countries_number($variables) {
+  if (isset($variables['country']) && !empty($variables['country']->numcode)) {
+    return sprintf("%03s", $variables['country']->numcode);
+  }
+  return '';
 }
