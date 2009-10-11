@@ -156,10 +156,10 @@ ISO numeric-3 code
 HOWTO / FAQ
 -----------
 
-1 - Revert the database to the orginal values.
+1 - Revert the database to the original values.
 
 Currently this is not possible. You would have to uninstall and install the
-module. Any customisations, (and maybe fields), would need to be recreated and
+module. Any customizations, (and maybe fields), would need to be recreated and
 populated
 
 2 - Change the continent list.
@@ -228,9 +228,9 @@ countries that Drupal generates, these must be present in the database. Also
 done to ensure that existing references to these countries still exist, even if
 you can no longer select them when they are disabled.
 
-6 - How does this difer from countries_api?
+6 - How does this differ from countries_api?
 
-The countries_api is a just that, an API locked into a backend country and
+The countries_api is a just that, an API locked into a back-end country and
 regions database that has no configurable options. It main purpose is converting
 country code data from one format to another. 
 
@@ -243,6 +243,91 @@ The Countries module is based on the philosophy that only the ISO2 code can be
 trusted. All other data can be modified by the sites administrator, and the ISO2
 is the primary key. Then the most common country requirements are built on top
 of this base, providing the input elements, etc. 
+
+7 - Related modules
+
+Most other related modules involve external geo-data lookups / regional data
+integration.
+
+A quick search on drupalmodules.com provided the following list
+
+ * addresses - http://drupal.org/project/addresses
+   A comprehensive module that is covers countries, regions, zip codes, postal
+   formats, ...
+   
+ * zipcode (CCK) - http://drupal.org/project/zipcode
+   Hardcode validation of the Zip codes for 8 countries.
+
+ * GeoNames - http://drupal.org/project/geonames
+   XML-based Services from GeoNames.
+
+ * Profile Location - http://drupal.org/project/profile_location
+   Region / Country profile field.
+
+ * IP to Country - http://drupal.org/project/ip2cc
+   IP to Country lookup.
+
+ * IP-based Determination of a Visitor's Country
+      - http://drupal.org/project/ip2country
+   IP to Country lookup.
+
+ * IP2Nation API - http://drupal.org/project/ip2nation
+   IP to Country lookup.
+
+ * Hostip - http://drupal.org/project/hostip
+   IP to Country lookup.
+    
+ * GeoUser - http://drupal.org/project/geouser
+   IP to Country lookup.
+    
+ * GeoIP API - http://drupal.org/project/geoip
+   API for external database.
+    
+ * Country codes API - http://drupal.org/project/countries_api
+   API for mapping country / region data.
+    
+ * Ad GeoIP - http://drupal.org/project/ad_geoip
+   Adds geotargeting functionality to the Drupal advertisement module.
+    
+ * SIN - CCK - http://drupal.org/project/sin
+   Country Social Insurance Numbers CCK field.
+    
+ * Country code - http://drupal.org/project/country_code
+   Location content handling based on the user's IP address.
+    
+ * Site Country - http://drupal.org/project/site_country
+   Enables site default country. (Now in core)
+
+ * GeoSniper - http://drupal.org/project/geosniper
+   User information in a block.
+
+                  Drupal ver.  Features
+                  5.x 6.x 7.x  DB IP2C IPO Flags CCK Other / Notes
+ad_geoip           y   y       y   y                 ad module extension
+addresses                      y                  y  Multiple fields
+country_code           y       c                     Site switching
+countries_api      y   y       y                     Data mapping
+geoip              y   y       c   y
+geonames           y   y       y   y   y
+geosniper              y               y             Info block
+geouser                y       c   y                 Stored against user
+hostip             y               y
+ip2cc              y   y           y
+ip2nation          y   y       y   y   y    y
+ip2country         y   y           y
+profile_location   y   y       y                  -  Profile region / country
+sin                y   y                          y  Social Insurance Numbers
+site_country           y  core c                     Default country 
+zipcode                y       c*                 y  Zipcodes
+    
+Key
+---
+DB - Country database: y - db, c - code, c* - limited code info 
+IP2C - IP to Country lookup
+IPO - IP to xxx. Gets geodata about the users location
+Flags - Country flags
+CCK - Provides CCK or Fields
+
 
 AUTHOR
 ------
