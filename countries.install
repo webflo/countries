@@ -63,8 +63,7 @@ function countries_schema() {
  * Implement hook_install().
  */
 function countries_install() {
-  // Create tables.
-  drupal_install_schema('countries');
+  // Import the data.
   countries_import_csv();
 }
 
@@ -72,7 +71,6 @@ function countries_install() {
  * Implement hook_uninstall().
  */
 function countries_uninstall() {
-  drupal_uninstall_schema('countries');
   variable_del('countries_continents');
 }
 
@@ -125,6 +123,7 @@ function countries_import_csv() {
       );
     }
   }
+  print_r($countries);
   $insert = db_insert('countries_country')->fields(array('iso2', 'iso3', 'name', 'official_name', 'continent', 'enabled', 'numcode'));
   foreach ($countries as $country) {
     $insert->values($country);

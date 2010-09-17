@@ -121,7 +121,8 @@ function countries_country_element_validate($element, &$form_state) {
     $values[] = array('iso2' => $value);
   }
   if ($element['#cardinality'] >= 0 && count($values) > $element['#cardinality']) {
-    form_error($element, t('%name field is restricted to %max countries.', array('%name' => $element['#title'], '%max' => $element['#cardinality'])));
+    $title = empty($element['#title']) ? t('Countries') : $element['#title'];
+    form_error($element, t('%name field is restricted to %max countries.', array('%name' => $title, '%max' => $element['#cardinality'])));
   }
 
 }
@@ -217,6 +218,7 @@ function countries_countries_alter(&$countries) {
         $enabled_countries[$country->iso2] = $country->name;
       }
     }
+    asort($enabled_countries);
   }
   $countries = array_intersect_key($enabled_countries, $countries);
 }
@@ -236,7 +238,8 @@ function countries_get_countries($property = 'all') {
   $countries = &drupal_static(__FUNCTION__, array());
   if (empty($countries)) {
     $query = db_select('countries_country', 'c')
-      ->fields('c');
+      ->fields('c')
+      ->orderBy('name', 'ASC');
     $result = $query->execute();
     foreach ($result as $country) {
       // TODO: I18n
@@ -276,8 +279,8 @@ function countries_field_schema($field) {
   return array(
     'columns' => array(
       'iso2' => array(
-        'type' => 'char',
-        'length' => 3,
+        'type' => 'varchar',
+        'length' => 2,
         'not null' => FALSE,
       ),
     ),
@@ -319,7 +322,7 @@ function countries_field_is_empty($item, $field) {
 }
 
 /**
- * Implement hook_field_formatter_info().
+ * Implements hook_field_formatter_info().
  */
 function countries_field_formatter_info() {
   return array(
@@ -347,46 +350,43 @@ function countries_field_formatter_info() {
 }
 
 /**
- * Theme function for 'default' country field formatter.
+ * Implements hook_field_formatter_view().
  */
-function theme_field_formatter_country_default($variables) {
-  $element = $variables['element'];
-  return $element['#item']['safe'];
-}
+function countries_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  print_r($items);
+  foreach ($items as $delta => $item) {
+    $country = $item['country'];
+    switch ($display['type']) {
+      case 'country_default':
+        $element[$delta]['#markup'] = $item['safe'];
+        break;
 
-/**
- * Theme function for showing the countries official name.
- */
-function theme_field_formatter_country_official($variables) {
-  $element = $variables['element'];
-  if (!empty($element['#item']['country']->official_name)) {
-    return check_plain($element['#item']['country']->official_name);
+      case 'country_official':
+        if (!empty($country->official_name)) {
+          $element[$delta]['#markup'] = check_plain($country->official_name);
+        }
+        else {
+          $element[$delta]['#markup'] = $item['safe'];
+        }
+        break;
+
+      case 'country_alpha_2':
+        $element[$delta]['#markup'] = check_plain($country->iso2);
+        break;
+
+      case 'country_alpha_3':
+        $element[$delta]['#markup'] = empty($country->iso3) ? '---' : check_plain($country->iso3);
+        break;
+
+      case 'country_number':
+        $element[$delta]['#markup'] = theme('countries_number', array('country' => $country));
+        break;
+
+    }
   }
-  return $element['#item']['safe'];
-}
 
-/**
- * Theme function for showing the country ISO 3166-1 alpha-2 code.
- */
-function theme_field_formatter_country_alpha_2($variables) {
-  $country = $variables['element']['#item']['country'];
-  return check_plain($country->iso2);
-}
-
-/**
- * Theme function for showing the country ISO 3166-1 alpha-3 code.
- */
-function theme_field_formatter_country_alpha_3($variables) {
-  $country = $variables['element']['#item']['country'];
-  return empty($country->iso3) ? '---' : check_plain($country->iso3);
-}
-
-/**
- * Theme function for showing the country number.
- */
-function theme_field_formatter_country_number($variables) {
-  $element = $variables['element'];
-  return theme('countries_number', array('country' => $element['#item']['country']));
+  return $element;
 }
 
 /**
@@ -441,9 +441,9 @@ function countries_field_widget_settings_form($field, $instance) {
 }
 
 /**
- * Implement hook_field_widget().
+ * Implements hook_field_widget_form().
  */
-function countries_field_widget(&$form, &$form_state, $field, $instance, $langcode, $items, $delta = 0) {
+function countries_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
   $default_value = array();
   if (!is_array($items)) {
     $items = array_filter(array($items));
@@ -456,7 +456,7 @@ function countries_field_widget(&$form, &$form_state, $field, $instance, $langco
     'continents' => array_filter($settings['continents']),
     'enabled' => $settings['enabled'],
   );
-  $element = array(
+  $element += array(
     '#type' => 'country',
     '#default_value' => $default_value,
     '#multiple' => $field['cardinality'] != 1,
