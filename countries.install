@@ -8,6 +8,12 @@ function countries_schema() {
   $schema['countries_country'] = array(
     'description' => 'Maintains a country database.',
     'fields' => array(
+      'cid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique country ID. Required for the country bundle.',
+      ),
       'iso2' => array(
         'description' => 'ISO2 country code.',
         'type' => 'char',
@@ -48,7 +54,19 @@ function countries_schema() {
         'description' => 'Whether the country is enabled.',
       ),
     ),
-    'primary key' => array('iso2'),
+    'primary key' => array('cid'),
+    'unique keys' => array(
+      'iso2' => array('iso2'),
+      'iso3' => array('iso3'),
+      'numcode' => array('numcode'),
+      'name' => array('name'),
+      'official_name' => array('official_name'),
+    ),
+    'indexes' => array(
+      'enabled' => array('enabled'),
+      'continent' => array('continent'),
+    ),
+
   );
 
   return $schema;
@@ -123,7 +141,6 @@ function countries_import_csv() {
       );
     }
   }
-  print_r($countries);
   $insert = db_insert('countries_country')->fields(array('iso2', 'iso3', 'name', 'official_name', 'continent', 'enabled', 'numcode'));
   foreach ($countries as $country) {
     $insert->values($country);

@@ -46,9 +46,8 @@ function countries_admin_overview() {
         case 'numcode':
           $row[] = theme('countries_number', array('country' => $country));
           break;
-        case 'iso3':
         default:
-          $row[] = $country->$key;
+          $row[] = check_plain($country->$key);
           break;
       }
     }
@@ -82,13 +81,15 @@ function countries_admin_overview() {
 function countries_admin_page($country = NULL) {
   if (!isset($country->name)) {
     drupal_set_title(t('Add country'), PASS_THROUGH);
-    $country = (object)array('iso2' => '',
-        'iso3' => '',
-        'name' => '',
-        'official_name' => '',
-        'continent' => 'UN',
-        'enabled' => 1,
-        'numcode' => 0);
+    $country = (object)array(
+      'cid' => 0,
+      'iso2' => '',
+      'iso3' => '',
+      'name' => '',
+      'official_name' => '',
+      'continent' => 'UN',
+      'enabled' => 1,
+      'numcode' => 0);
 
   }
   return drupal_get_form('countries_admin_form', $country);
@@ -104,6 +105,11 @@ function countries_admin_page($country = NULL) {
 function countries_admin_form($form, &$form_state, $country) {
 
   $form = array();
+  $form['cid'] = array(
+    '#type' => 'value',
+    '#value' => $country->cid,
+  );
+
   $form['name'] = array(
     '#type' => 'textfield',
     '#title' => t('Name'),
@@ -180,7 +186,11 @@ function countries_admin_form($form, &$form_state, $country) {
   if (!empty($country->iso2)) {
     $form['#country'] = $country;
   }
-  $form['submit'] = array('#type' => 'submit', '#value' => t('Save'));
+
+  $country = (object) $country;
+  field_attach_form('country', $country, $form, $form_state);
+
+  $form['submit'] = array('#type' => 'submit', '#value' => t('Save'), '#weight' => 100);
 
   return $form;
 }
@@ -244,19 +254,23 @@ function countries_admin_form_submit($form, &$form_state) {
   $country = (object) $form_state['values'];
   $iso2 = isset($form['#country']) ? $form['#country']->iso2 : FALSE;
 
+  field_attach_presave('country', $country);
+
   if ($iso2) {
-    if ($country != $iso2) {
+    if ($country->iso2 != $iso2) {
       db_update('countries_country')
         ->fields(array('iso2' => $country->iso2))
         ->condition('iso2', $iso2)
         ->execute();
     }
     drupal_write_record('countries_country', $country, array('iso2'));
+    field_attach_update('country', $country);
     $message = t('The country %country has been updated.', array('%country' => $country->name));
     field_cache_clear();
   }
   else {
     drupal_write_record('countries_country', $country);
+    field_attach_insert('country', $country);
     $message = t('Added country %country.', array('%country' => $country->name));
   }
   // TODO: I18n
@@ -296,6 +310,7 @@ function countries_admin_delete($form, &$form_state, $country) {
  */
 function countries_admin_delete_submit($form, &$form_state) {
   $country = $form['#country'];
+  field_attach_delete('country', $country);
   db_delete('countries_country')
     ->condition('iso2', $country->iso2)
     ->execute();

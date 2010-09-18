@@ -67,6 +67,8 @@ function countries_menu() {
 
 /**
  * Menu wildcard loader.
+ *
+ * See countries_load($cid).
  */
 function country_load($iso2) {
   $countries = countries_get_countries();
@@ -238,12 +240,13 @@ function countries_get_countries($property = 'all') {
   $countries = &drupal_static(__FUNCTION__, array());
   if (empty($countries)) {
     $query = db_select('countries_country', 'c')
-      ->fields('c')
+      ->fields('c', array('cid'))
       ->orderBy('name', 'ASC');
     $result = $query->execute();
     foreach ($result as $country) {
       // TODO: I18n
       // countries_localize_country($country);
+      $country = countries_load($country->cid);
       $countries[$country->iso2] = $country;
     }
   }
@@ -493,4 +496,48 @@ function theme_countries_number($variables) {
     return sprintf("%03s", $variables['country']->numcode);
   }
   return '';
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function countries_entity_info() {
+  $return = array(
+    'country' => array(
+      'label' => t('Country'),
+      'base table' => 'countries_country',
+      'fieldable' => TRUE,
+      'entity keys' => array(
+        'id' => 'cid',
+      ),
+      'bundles' => array(
+        'country' => array(
+          'label' => t('Country'),
+          'admin' => array(
+            'path' => 'admin/config/regional/countries',
+            'access arguments' => array('administer site configuration'),
+          ),
+        ),
+      ),
+      'view modes' => array(
+        'full' => array(
+          'label' => t('Country'),
+          'custom settings' => FALSE,
+        ),
+      ),
+    ),
+  );
+  return $return;
+}
+
+/**
+ * Required to trigger the bundle / fields.
+ */
+function countries_load_multiple($cids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('country', $cids, $conditions, $reset);
+}
+
+function countries_load($cid, $reset = FALSE) {
+  $countries = countries_load_multiple(array($cid), array(), $reset);
+  return reset($countries);
 }
