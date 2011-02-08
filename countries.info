@@ -1,8 +1,11 @@
 ; $Id$
 name = Countries
 description = A module that provides a FAPI / Field country element and a simple wrapper module to store / update country data.
-package = Other
+package = Fields
 version = VERSION
 core = 7.x
 files[]=countries.module
+files[]=countries.install
 files[]=countries.admin.inc
+configure = admin/config/regional/countries
+
