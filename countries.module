@@ -328,7 +328,7 @@ function countries_field_is_empty($item, $field) {
  * Implements hook_field_formatter_info().
  */
 function countries_field_formatter_info() {
-  return array(
+  $formatters = array(
     'country_default' => array(
       'label' => t('Default'),
       'field types' => array('country'),
@@ -350,6 +350,25 @@ function countries_field_formatter_info() {
       'field types' => array('country'),
     ),
   );
+
+  // Third party module integration. Use "country_{$module}_data1_data2" format.
+  if (module_exists('countryicons')) {
+    foreach (countryicons_get_iconsets() as $iconsets) {
+      $formatter = implode('_', array('country', 'countryicons', 'image', $iconsets['name']));
+      $formatters[$formatter] = array(
+        'label' => t('Country icon image ' . $iconsets['name']),
+        'field types' => array('country'),
+      );
+
+      $formatter = implode('_', array('country', 'countryicons', 'sprite', $iconsets['name']));
+      $formatters[$formatter] = array(
+        'label' => t('Country icon sprite ' . $iconsets['name']),
+        'field types' => array('country'),
+      );
+    }
+  }
+
+  return $formatters;
 }
 
 /**
@@ -383,6 +402,31 @@ function countries_field_formatter_view($entity_type, $entity, $field, $instance
 
       case 'country_number':
         $element[$delta]['#markup'] = theme('countries_number', array('country' => $country));
+        break;
+
+      default:
+        list(,$icon_module,$icon_type,$icon_set_name) = explode('_', $display['type'], 4);
+        if (module_exists($icon_module)) {
+          // countryicons formatters
+          switch ($icon_module) {
+            case 'countryicons':
+              $variables = array(
+                'code'    => $country->iso2,
+                'iconset' => $icon_set_name,
+                'alt'     => $country->iso2,
+                'title'   => $country->name,
+              );
+              if ($icon_type == 'sprite') {
+                $element[$delta]['#markup'] = theme('countryicons_icon_sprite', $variables);
+              }
+              else {
+                // Type 'image' is the default.
+                $element[$delta]['#markup'] = theme('countryicons_icon', $variables);
+              }
+              break;
+
+          }
+        }
         break;
 
     }
