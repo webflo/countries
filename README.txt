@@ -18,7 +18,7 @@ Drupal 7.x
 
 INSTALLATION
 ------------
-1.  To install the module copy the 'moderation' folder to your 
+1.  To install the module copy the 'countries' folder to your 
     sites/all/modules directory.
 
 2.  Go to admin/build/modules. Enable the module.

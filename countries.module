@@ -42,7 +42,7 @@ function countries_menu() {
     'file' => 'countries.admin.inc',
   );
   $items['admin/config/regional/countries/%country'] = array(
-    'type' => MENU_CALLBACK,
+    'type' => MENU_VISIBLE_IN_BREADCRUMB,
     'page callback' => 'countries_admin_page',
     'page arguments' => array(4),
     'access arguments' => array('administer site configuration'),
@@ -58,7 +58,7 @@ function countries_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('countries_admin_delete', 4),
     'access arguments' => array('administer site configuration'),
-    'type' => MENU_CALLBACK,
+    'type' => MENU_VISIBLE_IN_BREADCRUMB,
     'file' => 'countries.admin.inc',
   );
 
