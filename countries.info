@@ -8,4 +8,5 @@ files[]=countries.module
 files[]=countries.install
 files[]=countries.admin.inc
 configure = admin/config/regional/countries
+recommends[] = countryicons
 

@@ -104,6 +104,11 @@ function countries_admin_page($country = NULL) {
  */
 function countries_admin_form($form, &$form_state, $country) {
 
+  // Menu callbacks do not have page titles.
+  if ($country->cid) {
+    drupal_set_title(t('Edit country %title', array('%title' => $country->name)), PASS_THROUGH);
+  }
+
   $form = array();
   $form['cid'] = array(
     '#type' => 'value',
@@ -127,7 +132,7 @@ function countries_admin_form($form, &$form_state, $country) {
   if ($iso2_editable) {
     $form['iso2'] = array(
       '#type' => 'textfield',
-      '#title' => t('ISO2 code'),
+      '#title' => t('ISO alpha-2 code'),
       '#default_value' => $country->iso2,
       '#description' => t('Specify a unique ISO2 code for this country. This is used as the key to this country, changing it may result in the loss of data.'),
       '#required' => TRUE,
@@ -139,9 +144,9 @@ function countries_admin_form($form, &$form_state, $country) {
       '#type' => 'value',
       '#value' => $country->iso2,
     );
-    $form['iso2_info'] = array(
+    $form['iso2']['iso2_info'] = array(
       '#type' => 'textfield',
-      '#title' => t('ISO2 code'),
+      '#title' => t('ISO alpha-2 code'),
       '#value' => $country->iso2,
       '#disabled' => TRUE,
       '#description' => t('Core country ISO2 codes are not editable.'),
@@ -149,7 +154,7 @@ function countries_admin_form($form, &$form_state, $country) {
   }
   $form['iso3'] = array(
     '#type' => 'textfield',
-    '#title' => t('ISO3 code'),
+    '#title' => t('ISO alpha-3 code'),
     '#default_value' => $country->iso3,
     '#description' => t('Specify a unique ISO3 code for this country.'),
     '#required' => FALSE,
@@ -165,7 +170,7 @@ function countries_admin_form($form, &$form_state, $country) {
   );
   $form['numcode'] = array(
     '#type' => 'textfield',
-    '#title' => t('Number code'),
+    '#title' => t('ISO numeric-3 code'),
     '#default_value' => empty($country->numcode) ? '' : $country->numcode,
     '#description' => t('Specify a unique number code for this country.'),
     '#required' => FALSE,
@@ -252,6 +257,8 @@ function countries_admin_form_validate($form, &$form_state) {
  */
 function countries_admin_form_submit($form, &$form_state) {
   $country = (object) $form_state['values'];
+  entity_form_submit_build_entity('country', $country, $form, $form_state);
+
   $iso2 = isset($form['#country']) ? $form['#country']->iso2 : FALSE;
 
   field_attach_presave('country', $country);

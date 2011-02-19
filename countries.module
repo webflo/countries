@@ -83,7 +83,7 @@ function countries_element_info() {
     '#input' => TRUE,
     '#size' => 0,
     '#multiple' => FALSE,
-    '#process' => array('countries_country_expand', 'ajax_process_form'),
+    '#process' => array('countries_country_expand', 'form_process_select', 'ajax_process_form'),
     '#element_validate' => array('countries_country_element_validate'),
     '#theme' => 'select',
     '#theme_wrappers' => array('form_element'),
@@ -572,6 +572,39 @@ function countries_entity_info() {
     ),
   );
   return $return;
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ */
+function countries_field_extra_fields() {
+  $extra = array();
+
+  $extra['country']['country'] = array(
+    'form' => array(),
+    'display' => array()
+  );
+
+  $core_properties = array(
+    'iso2' => t('ISO alpha-2 code'),
+    'iso3' => t('ISO alpha-3 code'),
+    'name' => t('Name'),
+    'official_name' => t('Official name'),
+    'numcode' => t('ISO numeric-3 code'),
+    'continent' => t('Continent'),
+    'enabled' => t('Enabled')
+  );
+
+  $weight = -20;
+  foreach ($core_properties as $key => $title) {
+    $extra['country']['country']['form'][$key] = array(
+      'label' => $title,
+      'description' => $title,
+      'weight' => $weight++,
+    );
+  }
+
+  return $extra;
 }
 
 /**

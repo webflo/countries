@@ -11,7 +11,7 @@
  */
 function countries_token_info() {
   $types['country'] = array(
-    'name' => t('Users'),
+    'name' => t('Countries'),
     'description' => t('Tokens related to individual countries.'),
     'needs-data' => 'country',
   );
@@ -75,7 +75,7 @@ function countries_tokens($type, $tokens, array $data = array(), array $options 
     $country = $data['country'];
     foreach ($tokens as $name => $original) {
       switch ($name) {
-        // Basic user country information.
+        // Basic country information.
         case 'cid':
           $replacements[$original] = $country->cid;
           break;
