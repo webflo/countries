@@ -1,4 +1,3 @@
-$Id$
 
 Countries module - http://drupal.org/project/countries
 ======================================================
