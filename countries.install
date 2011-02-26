@@ -98,7 +98,6 @@ function countries_import_csv() {
   $t = get_t();
   $countries = array();
   $handle = fopen(dirname(__FILE__) ."/countries.csv", "r");
-  $cvs_headers = fgetcsv($handle, 1024, ",");
   $headers = fgetcsv($handle, 1024, ",");
   while (($row = fgetcsv($handle, 1024, ",")) !== FALSE) {
     $row[0] = trim($row[0]);  // iso2
