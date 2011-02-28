@@ -12,7 +12,13 @@ function countries_admin_overview() {
   $header = array();
   $header[] = array('data' => t('Name'), 'field' => 'c.name', 'sort' => 'asc');
   $header[] = array('data' => t('ISO2'), 'field' => 'c.iso2');
-  $columns = variable_get('countries_admin_overview_columns', array('iso3' => t('ISO3'), 'numcode' => t('Number code'), 'continent' => t('Continent'), 'official_name' => t('Official name')));
+  $columns = variable_get('countries_admin_overview_columns',
+    array(
+      'iso3' => t('ISO3'),
+      'numcode' => t('Number code'),
+      'continent' => t('Continent'),
+      'official_name' => t('Official name'))
+  );
   foreach ($columns as $key => $title) {
     $header[] = array('data' => $title, 'field' => 'c.' . $key);
   }
@@ -52,6 +58,12 @@ function countries_admin_overview() {
     }
     $row[] = $country->enabled ? t('Enabled') : t('Disabled');
     $operations = l(t('edit'), 'admin/config/regional/countries/' . $country->iso2 , array('query' => $destination));
+    if (module_exists('countries_regions')) {
+
+      $count = countries_regions_count($country);
+
+      $operations .= '&nbsp;&nbsp;&nbsp;' . l(t('!count regions', array('!count' => $count)), 'admin/config/regional/countries/' . $country->iso2 . '/regions', array('query' => $destination));
+    }
     if (!array_key_exists($country->iso2, $core_countries)) {
       $operations .= '&nbsp;&nbsp;&nbsp;' . l(t('delete'), 'admin/config/regional/countries/' . $country->iso2 . '/delete', array('query' => $destination));
     }
@@ -258,32 +270,19 @@ function countries_admin_form_submit($form, &$form_state) {
   $country = (object) $form_state['values'];
   entity_form_submit_build_entity('country', $country, $form, $form_state);
 
+  // Required to trigger an update.
   $iso2 = isset($form['#country']) ? $form['#country']->iso2 : FALSE;
 
-  field_attach_presave('country', $country);
+  country_save($country, $iso2);
 
   if ($iso2) {
-    if ($country->iso2 != $iso2) {
-      db_update('countries_country')
-        ->fields(array('iso2' => $country->iso2))
-        ->condition('iso2', $iso2)
-        ->execute();
-    }
-    drupal_write_record('countries_country', $country, array('iso2'));
-    field_attach_update('country', $country);
     $message = t('The country %country has been updated.', array('%country' => $country->name));
-    field_cache_clear();
   }
   else {
-    drupal_write_record('countries_country', $country);
-    field_attach_insert('country', $country);
     $message = t('Added country %country.', array('%country' => $country->name));
   }
-  // TODO: I18n
-  // countries_locale_process($country);
   drupal_set_message($message);
   $form_state['redirect'] = 'admin/config/regional/countries';
-
 }
 
 /**
@@ -322,4 +321,178 @@ function countries_admin_delete_submit($form, &$form_state) {
     ->execute();
   drupal_set_message(t('Deleted country %country.', array('%country' => $country->name)));
   $form_state['redirect'] = 'admin/config/content/countries';
+}
+
+/**
+ * Menu callback to update the database from the CSV file.
+ */
+function countries_admin_import_form($form, &$form_state) {
+  $changes = countries_csv_updates();
+  if (count($changes['inserts'])) {
+    $form_state['inserts'] = $changes['inserts'];
+    $form['inserts'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Select the countries to import'),
+    );
+    foreach ($changes['inserts'] as $iso2 => $country) {
+      $t_options = array(
+        '%name' => $country->name,
+        '%continent' => $country->continent,
+        '%official_name' => $country->official_name,
+        '%iso2' => $country->iso2,
+        '%iso3' => $country->iso3,
+        '%numcode' => theme('countries_number', array('country' => $country)),
+        '%enabled' => $country->enabled ? t('Enabled') : t('Disabled'),
+      );
+      $form['inserts']['#options'][$iso2] = t('New country %name, %continent (%official_name): %iso2, %iso3, %numcode, %enabled', $t_options);
+      $form['inserts']['#default_options'][$iso2] = $iso2;
+    }
+  }
+  else {
+    $form['inserts'] = array(
+      '#type' => 'markup',
+      '#markup' => '<div class="form-item">' . t('There are no new records to import.') . '</div>',
+    );
+  }
+  if (count($changes['updates'])) {
+    $form_state['updates'] = $changes['updates'];
+    $form['updates'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Select the countries and their properties to update'),
+    );
+    //  $updates[$country->iso2][$key] = array('new' => $country->{$key}, 'old' => $existing->{$key});
+
+    foreach ($changes['updates'] as $iso2 => $changes) {
+      $country = country_load($iso2);
+      foreach ($changes as $key => $values) {
+        $t_options = array(
+          '%name' => $country->name,
+          '%iso2' => $country->iso2,
+          '%code' => $key,
+          '%new' => $values['new'],
+          '%old' => $values['old'],
+        );
+        if ($key == 'enabled') {
+          if ($values['new']) {
+            $form['updates']['#options'][$iso2 . '-' . $key] = t('%name (%iso2): Enable this country', $t_options);
+          }
+          else {
+            $form['updates']['#options'][$iso2 . '-' . $key] = t('%name (%iso2): Disable this country', $t_options);
+          }
+
+        }
+        else {
+          $form['updates']['#options'][$iso2 . '-' . $key] = t('%name (%iso2): Change %code from "%old" to "%new"', $t_options);
+        }
+        $form['updates']['#default_options'][$iso2 . '-' . $key] = $iso2 . '-' . $key;
+      }
+    }
+  }
+  else {
+    $form['updates'] = array(
+      '#type' => 'markup',
+      '#markup' => '<div class="form-item">' . t('There are no updates to import.') . '</div>',
+    );
+  }
+  if (!empty($form_state['inserts']) || !empty($form_state['updates'])) {
+    $form['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Import'),
+    );
+  }
+  return $form;
+}
+
+function countries_admin_import_form_submit($form, &$form_state) {
+  $inserted = array();
+  if (!empty($form_state['inserts'])) {
+    foreach (array_filter($form_state['values']['inserts']) as $iso2) {
+      $country = $form_state['inserts'][$iso2];
+      country_save($form_state['inserts'][$iso2]);
+      $inserted[] = l($country->name, 'admin/config/regional/countries/' . $country->iso2);
+    }
+  }
+  if (count($inserted)) {
+    drupal_set_message(t('The newly imported countries were: !countries', array('!countries' => implode('; ', $inserted))));
+  }
+
+  $updated = array();
+  if (!empty($form_state['updates'])) {
+    $changes = array();
+    foreach (array_filter($form_state['values']['updates']) as $change) {
+      list($iso2,$key) = explode ('-', $change);
+      $changes[$iso2][$key] = $form_state['updates'][$iso2][$key]['new'];
+    }
+    foreach ($changes as $iso2 => $values) {
+      $country = country_load($iso2);
+      foreach ($values as $key => $value) {
+        $country->{$key} = $value;
+      }
+      country_save($country, $iso2);
+      $updated[] = l($country->name, 'admin/config/regional/countries/' . $country->iso2);
+    }
+  }
+  if (count($updated)) {
+    drupal_set_message(t('The updated countries were: !countries', array('!countries' => implode('; ', $updated))));
+  }
+
+  if (empty($inserted) && empty($updated)) {
+    drupal_set_message(t('No changes to the countries database were done.'));
+  }
+  $form_state['redirect'] = 'admin/config/regional/countries';
+}
+
+function countries_csv_updates($file = NULL) {
+  if (!$file) {
+    $file = drupal_get_path('module', 'countries') . '/countries.csv';
+  }
+
+  $countries = array();
+  $handle = fopen($file, "r");
+  $headers = fgetcsv($handle, 1024, ",");
+  while (($row = fgetcsv($handle, 1024, ",")) !== FALSE) {
+    $row[0] = trim($row[0]);  // iso2
+    $row[1] = empty($row[1]) || $row[1] == 'NULL' ? '' : trim($row[1]); // iso3
+    $row[2] = empty($row[2]) || $row[2] == 'NULL' ? '' : trim($row[2]); // name
+    $row[3] = empty($row[3]) || $row[3] == 'NULL' ? '' : trim($row[3]); // official name
+    $row[4] = empty($row[4]) || $row[4] == 'NULL' ? 0 : trim($row[4]); // number code
+    $row[5] = empty($row[5]) || $row[5] == 'NULL' ? 'UN' : trim($row[5]); // continent
+    $row[6] = empty($row[6]) || $row[6] == 'NULL' ? '0' : '1'; // enabled
+    if (!empty($row[0]) && $row[0] != 'NULL') {
+      $countries[$row[0]] = array(
+        'iso2' => $row[0],
+        'iso3' => $row[1],
+        'name' => $row[2],
+        'official_name' => $row[3],
+        'numcode' => $row[4],
+        'continent' => $row[5],
+        'enabled' => $row[6],
+      );
+    }
+  }
+  fclose($handle);
+
+  $inserts = array();
+  $updates = array();
+
+  foreach ($countries as $country) {
+    $country = (object) $country;
+    if ($existing = country_load($country->iso2)) {
+      foreach (array('iso3', 'name', 'official_name', 'numcode', 'continent', 'enabled') as $key) {
+        if (empty($country->{$key}) && $country->{$key} !== '0') {
+          continue;
+        }
+        if ($existing->{$key} !== $country->{$key}) {
+          $updates[$country->iso2][$key] = array('new' => $country->{$key}, 'old' => $existing->{$key});
+        }
+      }
+    }
+    else {
+      $inserts[$country->iso2] = $country;
+    }
+  }
+  return array(
+    'inserts' => $inserts,
+    'updates' => $updates,
+  );
 }

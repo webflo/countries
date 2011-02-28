@@ -40,10 +40,21 @@ function countries_menu() {
     'weight' => 1,
     'file' => 'countries.admin.inc',
   );
+  $items['admin/config/regional/countries/import'] = array(
+    'title' => 'Update countries',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('countries_admin_import_form'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_LOCAL_ACTION,
+    'weight' => 2,
+    'file' => 'countries.admin.inc',
+  );
   $items['admin/config/regional/countries/%country'] = array(
     'type' => MENU_VISIBLE_IN_BREADCRUMB,
     'page callback' => 'countries_admin_page',
     'page arguments' => array(4),
+    'title callback' => 'countries_page_title',
+    'title arguments' => array(4),
     'access arguments' => array('administer site configuration'),
     'file' => 'countries.admin.inc',
   );
@@ -72,6 +83,43 @@ function countries_menu() {
 function country_load($iso2) {
   $countries = countries_get_countries();
   return isset($countries[$iso2]) ? $countries[$iso2] : NULL;
+}
+
+/**
+ * Saves a country.
+ *
+ * @param
+ *   $country The country object to save.
+ * @param
+ *   $iso2 The original iso2 code is required for updates.
+ *   Use FALSE if it is a new records / inserts.
+ */
+function country_save(&$country, $iso2 = FALSE) {
+  field_attach_presave('country', $country);
+  if ($iso2) {
+    if ($country->iso2 != $iso2) {
+      db_update('countries_country')
+        ->fields(array('iso2' => $country->iso2))
+        ->condition('iso2', $iso2)
+        ->execute();
+    }
+    drupal_write_record('countries_country', $country, array('iso2'));
+    field_attach_update('country', $country);
+    field_cache_clear();
+  }
+  else {
+    drupal_write_record('countries_country', $country);
+    field_attach_insert('country', $country);
+  }
+  // TODO: I18n
+  // countries_locale_process($country);
+}
+
+/**
+ * Menu page title callback.
+ */
+function countries_page_title($country) {
+  return check_plain($country->name);
 }
 
 /**

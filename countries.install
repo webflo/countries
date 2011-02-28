@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Install file for Countries API.
+ */
+
+/**
  * Implementation of hook_schema().
  */
 function countries_schema() {
@@ -72,11 +77,6 @@ function countries_schema() {
 }
 
 /**
- * @file
- * Install file for Countries API.
- */
-
-/**
  * Implement hook_install().
  */
 function countries_install() {
@@ -145,4 +145,11 @@ function countries_import_csv() {
   }
   $insert->execute();
   watchdog('countries', "Pre-populated countries data.");
+}
+/**
+ * This will flush the the menu cache to add the new import URL for country imports.
+ */
+function countries_update_7100() {
+  $t = get_t();
+  drupal_set_message($t('Visit the countries !config_page to import the most recent iso changes.', array('!config_page' => l('configuration page', 'admin/config/regional/countries/import'))));
 }
