@@ -229,6 +229,12 @@ function countries_country_expand($element) {
   }
   $element['#options'] = countries_filter($element['#options'], $element['#filters']);
 
+
+  // If not required, add a none option. This can be overridden via setting
+  // the $element['#empty_value'] parameter to NULL.
+  if (empty($element['#required']) && !isset($element['#empty_value'])) {
+    $element['#empty_value'] = '';
+  }
   return $element;
 }
 
