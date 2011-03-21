@@ -292,14 +292,13 @@ function countries_get_country($iso2, $property = 'all') {
 function countries_get_countries($property = 'all') {
   $countries = &drupal_static(__FUNCTION__, array());
   if (empty($countries)) {
-    $query = db_select('countries_country', 'c')
+    $cids = db_select('countries_country', 'c')
       ->fields('c', array('cid'))
-      ->orderBy('name', 'ASC');
-    $result = $query->execute();
-    foreach ($result as $country) {
-      // TODO: I18n
-      // countries_localize_country($country);
-      $country = countries_load($country->cid);
+      ->orderBy('name', 'ASC')
+      ->execute()
+      ->fetchCol();
+    $_countríes = countries_load_multiple($cids);
+    foreach($_countríes as $country) {
       $countries[$country->iso2] = $country;
     }
   }
