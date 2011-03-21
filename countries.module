@@ -505,11 +505,34 @@ function countries_field_widget_info() {
 }
 
 /**
- * Implement hook_field_widget_settings_form().
+ * Implements hook_field_widget_info_alter().
  */
-function countries_field_widget_settings_form($field, $instance) {
-  $widget = $instance['widget'];
-  $settings = $widget['settings'];
+function countries_field_widget_info_alter(&$info) {
+  $info['options_buttons']['field types'][] = 'country';
+  $info['options_select']['field types'][] = 'country';
+}
+
+/**
+ * Implements hook_options_list().
+ */
+function countries_options_list($field) {
+  $function = !empty($field['settings']['options_list_callback']) ? $field['settings']['options_list_callback'] : 'countries_country_expand';
+
+  $filters = array(
+    'continents' => array_filter($field['settings']['continents']),
+    'enabled' => $field['settings']['enabled'],
+  );
+
+  if (!isset($field['#filters'])) { $field['#filters'] = $filters; }
+  $field = $function($field);
+  return $field['#options'];
+}
+
+/**
+ * Implement hook_field_settings_form().
+ */
+function countries_field_settings_form($field, $instance, $has_data) {
+  $settings = $field['settings'];
 
   $form['enabled'] = array(
     '#type' => 'radios',
@@ -528,6 +551,7 @@ function countries_field_widget_settings_form($field, $instance) {
     '#default_value' => $settings['continents'],
     '#options' => countries_get_continents(),
     '#description' => t('If no continents are selected, this filter will not be used.'),
+    '#element_validate' => array('_countries_element_array_filter'),
   );
 
   $form['size'] = array(
@@ -536,7 +560,28 @@ function countries_field_widget_settings_form($field, $instance) {
     '#default_value' => $settings['size'],
     '#element_validate' => array('_element_validate_integer_positive'),
   );
+  
   return $form;
+}
+
+/**
+ * Helper function: filter form elements recursive
+ */
+function _countries_element_array_filter($element, &$form_state) {
+  _countries_element_array_filter_process($element['#array_parents'], $form_state['values']);
+}
+
+/**
+ * Helper function: invoked by _countries_element_array_filter()
+ */
+function _countries_element_array_filter_process($element = array(), &$form_state) {
+  $key = array_shift($element);
+  if (!empty($key)) {
+    _countries_element_array_filter_process($element, $form_state[$key]);
+    return;
+  }
+  
+  $form_state = array_filter(drupal_map_assoc($form_state));
 }
 
 /**
