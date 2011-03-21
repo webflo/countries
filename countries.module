@@ -505,11 +505,34 @@ function countries_field_widget_info() {
 }
 
 /**
- * Implement hook_field_widget_settings_form().
+ * Implements hook_field_widget_info_alter().
  */
-function countries_field_widget_settings_form($field, $instance) {
-  $widget = $instance['widget'];
-  $settings = $widget['settings'];
+function countries_field_widget_info_alter(&$info) {
+  $info['options_buttons']['field types'][] = 'country';
+  $info['options_select']['field types'][] = 'country';
+}
+
+/**
+ * Implements hook_options_list().
+ */
+function countries_options_list($field) {
+  $function = !empty($field['settings']['options_list_callback']) ? $field['settings']['options_list_callback'] : 'countries_country_expand';
+
+  $filters = array(
+    'continents' => array_filter($field['settings']['continents']),
+    'enabled' => $field['settings']['enabled'],
+  );
+
+  if (!isset($field['#filters'])) { $field['#filters'] = $filters; }
+  $field = $function($field);
+  return $field['#options'];
+}
+
+/**
+ * Implement hook_field_settings_form().
+ */
+function countries_field_settings_form($field, $instance, $has_data) {
+  $settings = $field['settings'];
 
   $form['enabled'] = array(
     '#type' => 'radios',
