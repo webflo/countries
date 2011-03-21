@@ -3,9 +3,9 @@ description = A module that provides a FAPI / Field country element and a simple
 package = Fields
 version = VERSION
 core = 7.x
-files[]=countries.module
-files[]=countries.install
-files[]=countries.admin.inc
+files[] = views/views_handler_field_countries_continent.inc
+files[] = views/views_handler_filter_countries_continents_list.inc
+files[] = views/views_handler_filter_countries_list.inc
 configure = admin/config/regional/countries
 recommends[] = countryicons
 

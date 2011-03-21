@@ -6,6 +6,8 @@
 define ('COUNTRIES_ALL', 0);
 define ('COUNTRIES_ENABLED', 1);
 define ('COUNTRIES_DISABLED', 2);
+define ('COUNTRIES_VIEWS_WIDGET_FIELD', 1);
+define ('COUNTRIES_VIEWS_WIDGET_CUSTOM', 2);
 
 /**
  * Implement hook_theme().
@@ -826,4 +828,14 @@ function countries_load_multiple($cids = array(), $conditions = array(), $reset 
 function countries_load($cid, $reset = FALSE) {
   $countries = countries_load_multiple(array($cid), array(), $reset);
   return reset($countries);
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function countries_views_api() {
+  return array(
+    'api' => '3',
+    'path' => drupal_get_path('module', 'countries') . '/views',
+  );
 }
